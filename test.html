@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VietMap - Quỹ đạo Bác Hồ</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.polylinesnakeanim@0.4.1/leaflet.polyline.snakeanim.min.js"></script>
+
+<style>
+:root{
+    --panel-w: 420px;
+    --bg-grad: linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+    --muted: rgba(255,255,255,0.08);
+    --accent1: #8ab4ff;
+    --accent2: #a48bff;
+    --btn-grad: linear-gradient(135deg,#6a5acd,#836fff);
+}
+html,body{height:100%;margin:0;padding:0;font-family:'Inter',sans-serif;background:var(--bg-grad);color:#f2f2f7;}
+body{display:flex;height:100vh;overflow:hidden;}
+#map{flex:1;height:100%;z-index:0;}
+#control-panel{
+    width:var(--panel-w);padding:28px;background:rgba(20,20,35,0.65);
+    backdrop-filter:blur(18px);box-shadow:0 0 25px rgba(0,0,0,0.4);
+    overflow-y:auto;position:relative;
+}
+h2{font-size:1.9em;margin:0 0 12px 0;color:var(--accent1);text-shadow:0 0 10px rgba(138,180,255,0.6);}
+h3{margin-top:24px;color:#c7d7ff;}
+.stat-box{
+    background:rgba(50,50,80,0.35);padding:15px;border-radius:10px;margin-bottom:15px;
+    border-left:4px solid var(--accent1);box-shadow:0 0 10px rgba(138,180,255,0.18);
+}
+.controls-group{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+button{
+    background:var(--btn-grad);color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;
+    font-weight:700;box-shadow:0 0 8px rgba(130,115,255,0.45);transition:transform .16s,box-shadow .16s;
+}
+button:hover{transform:translateY(-2px);box-shadow:0 0 16px rgba(150,140,255,0.8);}
+#search-input,input[type="range"]{
+    width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);
+    background:var(--muted);color:#fff;box-sizing:border-box;
+}
+#timeline-list{list-style:none;padding:0;margin:10px 0;}
+#timeline-list li{
+    background:rgba(255,255,255,0.06);padding:10px;border-radius:6px;margin-bottom:6px;cursor:pointer;transition:background .12s;
+}
+#timeline-list li:hover{background:rgba(255,255,255,0.11);}
+#timeline-list li.active-event{background:rgba(130,115,255,0.28);border-left:4px solid var(--accent2);font-weight:700;color:#fff;}
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,100,200,0.8); }
+    70% { box-shadow: 0 0 0 18px rgba(255,100,200,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,100,200,0); }
+}
+.leaflet-marker-icon.pulsing-marker{ animation:pulse 2.2s infinite; }
+@media (max-width: 900px){#control-panel{width:360px;padding:16px;}}
+@media (max-width: 640px){#control-panel{display:none;}}
+.leaflet-control-layers{ box-shadow:0 4px 18px rgba(0,0,0,0.6); border-radius:8px; overflow:hidden;}
+</style>
+</head>
+<body>
+<div id="control-panel">
+    <h2>🇻🇳 VietMap - Quỹ đạo Bác Hồ</h2>
+    <div class="stat-box">
+        <p><strong>Ngày hiện tại:</strong> <span id="current-date">1890-05-19</span></p>
+        <p><strong>Sự kiện:</strong> <span id="current-event">Nơi Bác Hồ Sinh ra.</span></p>
+    </div>
+    <h3>📊 Thống kê Tóm tắt</h3>
+    <p>Tổng sự kiện: <span id="total-events">...</span></p>
+    <p>Số quốc gia đã đi qua: <span id="total-countries">...</span></p>
+    <p>Thời gian bôn ba: <span id="travel-duration">...</span></p>
+    <p>Quãng đường ước tính: <span id="estimated-distance">...</span></p>
+    <div id="timeline-slider-container" style="margin-top:12px;">
+        <label for="timeline-slider">Thời gian: <span id="timeline-year">1890</span></label>
+        <input type="range" id="timeline-slider" min="0" max="0" value="0" />
+    </div>
+    <h3 style="margin-top:14px;">▶️ Điều khiển Hoạt hình</h3>
+    <div class="controls-group">
+        <button id="play-pause-btn">Bắt đầu</button>
+        <button id="next-btn">Sự kiện Kế tiếp »</button>
+        <button id="reset-btn">Đặt lại</button>
+    </div>
+    <p style="margin:6px 0 12px 0;">Tốc độ: <span id="speed-label">Bình thường</span> <input type="range" id="speed-control" min="300" max="2500" value="1500" /></p>
+    <hr style="border-color: rgba(255,255,255,0.06); margin-top:12px;" />
+    <h3>📌 Chi tiết Quỹ đạo</h3>
+    <input type="text" id="search-input" placeholder="Tìm kiếm theo địa điểm hoặc năm..." />
+    <ul id="timeline-list"></ul>
+</div>
+<div id="map"></div>
+
+<script>
+// ---------- DATA ----------
+const HOC_CHI_MINH_TRAJECTORY = [
+  { id: 1, date: "1890-05-19", year: 1890, event: "Nơi sinh: Làng Sen, Nghệ An.", description: "Nguyễn Sinh Cung (sau này là Hồ Chí Minh) ra đời tại làng Sen.", location: "Làng Sen, Nghệ An", lat: 18.6672, lon: 105.5700, country: "Việt Nam", imageUrl: "https://ik.imagekit.io/tvlk/blog/2023/06/lang-sen-que-bac-acc-1.png", sourceUrl: "https://tulieuvankien.dangcongsan.vn/c-mac-angghen-lenin-ho-chi-minh/ho-chi-minh/tieu-su-cuoc-doi-va-su-nghiep/thoi-nien-thieu-cua-chu-tich-ho-chi-minh-1890-1911-3487" },
+  { id: 2, date: "1911-06-05", year: 1911, event: "Ra đi tìm đường cứu nước.", description: "Người thanh niên Nguyễn Tất Thành rời bến cảng Sài Gòn trên tàu Amiral de Latouche Tréville.", location: "Cảng Sài Gòn", lat: 10.7686, lon: 106.7088, country: "Việt Nam", imageUrl: "https://baotanghochiminh.vn/pic/Customer/image00_637585327229311227_HasThumb.jpg", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Cuộc_đời_bôn_ba" },
+  { id: 3, date: "1911-07-06", year: 1911, event: "Đến Marseille, Pháp.", description: "Bắt đầu những năm tháng lao động, học tập và hoạt động cách mạng ở nước ngoài.", location: "Marseille", lat: 43.2965, lon: 5.3698, country: "Pháp", imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUe7o35TrNbmStjDlyFzITqFi56O2V0-mqrA&s", sourceUrl: "https://vi.wikipedia.org/wiki/Ng%C3%A0y_B%C3%A1c_H%E1%BB%93_ra_%C4%91i_t%C3%ACm_%C4%91%C6%B0%E1%BB%9Dng_c%E1%BB%A9u_n%C6%B0%E1%BB%9Bc#:~:text=%C4%90%E1%BA%BFn%20ng%C3%A0y%2015%20th%C3%A1ng%207,%C4%91%E1%BA%B7t%20ch%C3%A2n%20l%C3%AAn%20n%C6%B0%E1%BB%9Bc%20Ph%C3%A1p. " },
+  { id: 4, date: "1913-10-01", year: 1913, event: "Làm việc tại khách sạn Carlton, London.", description: "Nguyễn Ái Quốc làm thợ bánh ở khách sạn sang trọng tại Anh.", location: "London", lat: 51.5074, lon: -0.1278, country: "Anh", imageUrl: "https://thanhnien.mediacdn.vn/uploaded/ngocthanh/2016_02_08/bac-ho-6_IXXG.jpg?width=500", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Hoạt_động_ở_nước_ngoài" },
+  { id: 5, date: "1917-10-01", year: 1917, event: "Trở lại Paris, tham gia các hoạt động chính trị.", description: "Tham gia Đảng Xã hội Pháp, viết báo, phát biểu đòi quyền độc lập cho Việt Nam.", location: "Paris", lat: 48.8566, lon: 2.3522, country: "Pháp", imageUrl: "https://hips.hearstapps.com/hbz.h-cdn.co/assets/16/16/1461169489-hbz-vintage-paris-00-index-gettyimages-3092863.jpg?crop=0.8888888888888888xw:1xh;center,top&resize=1200:*", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Hoạt_động_ở_nước_ngoài" },
+  { id: 6, date: "1923-06-01", year: 1923, event: "Đến Moscow, Liên Xô, tham gia Quốc tế Cộng sản.", description: "Tham dự Đại hội Quốc tế Cộng sản, nghiên cứu về chủ nghĩa Marx-Lenin.", location: "Moscow", lat: 55.7558, lon: 37.6173, country: "Nga", imageUrl: "https://baotanglichsu.vn/DataFiles/News/Tintuc_cgs_vn_201461610h55m51s.jpg", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Hoạt_động_ở_nước_ngoài" },
+  { id: 7, date: "1924-12-01", year: 1924, event: "Đến Quảng Châu, Trung Quốc, mở lớp huấn luyện chính trị.", description: "Thành lập Hội Việt Nam Cách mạng Thanh niên, đào tạo cán bộ cách mạng Việt Nam.", location: "Quảng Châu", lat: 23.1291, lon: 113.2644, country: "Trung Quốc", imageUrl: "https://hungyen.dcs.vn/ckfinder/userfiles/files/58ce14d4-a5cd-42a5-85af-bf236899.jpg", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Hoạt_động_ở_nước_ngoài" },
+  { id: 8, date: "1941-02-08", year: 1941, event: "Trở về Tổ quốc tại Pác Bó, Cao Bằng.", description: "Sau 30 năm bôn ba hải ngoại, Bác Hồ trở về lãnh đạo cách mạng Việt Nam.", location: "Pác Bó, Cao Bằng", lat: 22.7533, lon: 105.7480, country: "Việt Nam", imageUrl: "https://tuyengiaocaobang.vn/uploads/news/2024_01/image-20240126143953-1.png", sourceUrl: "https://vi.wikipedia.org/wiki/Hồ_Chí_Minh#Trở_về_việt_nam" },
+  { id: 9, date: "1945-09-02", year: 1945, event: "Đọc Tuyên ngôn Độc lập tại Quảng trường Ba Đình.", description: "Khai sinh nước Việt Nam Dân chủ Cộng hòa, chấm dứt chế độ phong kiến và thực dân.", location: "Quảng trường Ba Đình, Hà Nội", lat: 21.0368, lon: 105.8342, country: "Việt Nam", imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcShNaiqeCUn_Z9iRtV6S_PCqAyV9d5ASqlgQg&s", sourceUrl: "https://vi.wikipedia.org/wiki/Tuyên_ngôn_Độc_lập_(Việt_Nam)" }
+];
+
+// ---------- GLOBALS ----------
+let map, snakePolyline, snakeAnimator=null, markers=[], path_coordinates=[], current_index=0, animation_interval=null;
+const playPauseBtn=document.getElementById('play-pause-btn'),
+      nextBtn=document.getElementById('next-btn'),
+      resetBtn=document.getElementById('reset-btn'),
+      speedControl=document.getElementById('speed-control'),
+      timelineSlider=document.getElementById('timeline-slider'),
+      timelineYearSpan=document.getElementById('timeline-year'),
+      searchInput=document.getElementById('search-input'),
+      timelineList=document.getElementById('timeline-list'),
+      speedLabel=document.getElementById('speed-label');
+
+// ---------- MAP SETUP ----------
+function setupMap(){
+    if(map){ try{ map.remove(); }catch(e){} }
+    map=L.map('map',{center:[20.0,107.0],zoom:3,zoomControl:false});
+    L.control.zoom({position:'bottomright'}).addTo(map);
+    const darkTile=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',className:'osm-dark'});
+    const lightTile=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'});
+    const satelliteTile=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri'});
+    const baseMaps={"Dark (OSM)":darkTile,"Light (OSM)":lightTile,"Satellite":satelliteTile};
+    darkTile.addTo(map);
+    L.control.layers(baseMaps).addTo(map);
+    snakePolyline=L.polyline([],{color:'#ff6ab3',weight:4,opacity:0.95,dashArray:'10, 10'}).addTo(map);
+}
+
+// ---------- UTIL ----------
+function safeStopAnimator(){ try{ if(snakeAnimator?.stop) snakeAnimator.stop(); else if(snakePolyline?._snaking) snakePolyline._snaking=false;}catch(e){} snakeAnimator=null; }
+function getSnakeSpeed(){
+    const v=Number(speedControl.value||1500),norm=(2500-v)/(2500-300),minS=200,maxS=1200;
+    return Math.round(minS+(1-norm)*(maxS-minS));
+}
+function updateSpeedLabel(){
+    const v=Number(speedControl.value);
+    if(v<800) speedLabel.textContent='Nhanh';
+    else if(v<1500) speedLabel.textContent='Bình thường';
+    else speedLabel.textContent='Chậm';
+}
+
+// ---------- STATS ----------
+function calculateEstimatedDistance(){
+    let totalKm=0;
+    for(let i=0;i<path_coordinates.length-1;i++){
+        const a=L.latLng(path_coordinates[i]),b=L.latLng(path_coordinates[i+1]);
+        totalKm+=map.distance(a,b)/1000;
+    }
+    return Math.round(totalKm);
+}
+function updateStats(){
+    document.getElementById('total-events').textContent=HOC_CHI_MINH_TRAJECTORY.length;
+    const totalCountries=new Set(HOC_CHI_MINH_TRAJECTORY.map(d=>d.country)).size;
+    document.getElementById('total-countries').textContent=totalCountries;
+    document.getElementById('estimated-distance').textContent=`${calculateEstimatedDistance()} km`;
+    if(HOC_CHI_MINH_TRAJECTORY.length>1){
+        const first=new Date(HOC_CHI_MINH_TRAJECTORY[0].date),last=new Date(HOC_CHI_MINH_TRAJECTORY[HOC_CHI_MINH_TRAJECTORY.length-1].date);
+        document.getElementById('travel-duration').textContent=`${last.getFullYear()-first.getFullYear()} năm`;
+    } else document.getElementById('travel-duration').textContent='N/A';
+}
+
+// ---------- MARKERS ----------
+function clearMarkers(){ markers.forEach(m=>{ try{ map.removeLayer(m); }catch(e){} }); markers=[]; }
+function updateMapAndPanel(index,animate=true){
+    if(index<0) index=0;
+    if(index>=HOC_CHI_MINH_TRAJECTORY.length){ if(animation_interval){ clearInterval(animation_interval); animation_interval=null;} playPauseBtn.textContent="Hoàn thành"; return; }
+    const current=HOC_CHI_MINH_TRAJECTORY[index],latlng=[current.lat,current.lon];
+    document.getElementById('current-date').textContent=current.date;
+    document.getElementById('current-event').textContent=current.event;
+    clearMarkers();
+    const marker=L.marker(latlng).addTo(map).bindPopup(`
+        <b>${current.event}</b><br>
+        ${current.location}<br>
+        <img src="${current.imageUrl}" style="width:100%;border-radius:6px;margin-top:4px;"><br>
+        <a href="${current.sourceUrl}" target="_blank" style="color:#8ab4ff;text-decoration:underline;">Đọc thêm</a>
+    `).openPopup();
+    marker._icon?.classList.add('pulsing-marker');
+    markers.push(marker);
+    path_coordinates=HOC_CHI_MINH_TRAJECTORY.slice(0,index+1).map(d=>[d.lat,d.lon]);
+    snakePolyline.setLatLngs(path_coordinates);
+    if(animate && index>0) snakePolyline.snakeIn({snakingSpeed:getSnakeSpeed()});
+    map.setView(latlng,5,{animate:true});
+    current_index=index;
+    timelineSlider.value=index;
+    timelineYearSpan.textContent=current.year;
+    highlightTimelineItem(index);
+}
+
+// ---------- TIMELINE ----------
+function initTimeline(){
+    timelineList.innerHTML='';
+    HOC_CHI_MINH_TRAJECTORY.forEach((item,i)=>{
+        const li=document.createElement('li');
+        li.textContent=`${item.date}: ${item.event}`;
+        li.dataset.index=i;
+        li.addEventListener('click',()=>updateMapAndPanel(i,false));
+        timelineList.appendChild(li);
+    });
+}
+function highlightTimelineItem(index){
+    Array.from(timelineList.children).forEach((li,i)=>li.classList.toggle('active-event',i===index));
+}
+
+// ---------- SEARCH ----------
+function filterTimeline(){
+    const q=searchInput.value.toLowerCase();
+    Array.from(timelineList.children).forEach(li=>{
+        const idx=li.dataset.index,evt=HOC_CHI_MINH_TRAJECTORY[idx].event.toLowerCase(),loc=HOC_CHI_MINH_TRAJECTORY[idx].location.toLowerCase(),yr=HOC_CHI_MINH_TRAJECTORY[idx].year.toString();
+        li.style.display=(evt.includes(q)||loc.includes(q)||yr.includes(q))?'block':'none';
+    });
+}
+
+// ---------- ANIMATION CONTROL ----------
+function startAnimation(){
+    if(animation_interval){ clearInterval(animation_interval); animation_interval=null; playPauseBtn.textContent='Bắt đầu'; return; }
+    playPauseBtn.textContent='Tạm dừng';
+    animation_interval=setInterval(()=>{
+        if(current_index>=HOC_CHI_MINH_TRAJECTORY.length-1){ clearInterval(animation_interval); animation_interval=null; playPauseBtn.textContent='Hoàn thành'; return; }
+        current_index++;
+        updateMapAndPanel(current_index,true);
+    },getSnakeSpeed());
+}
+function nextEvent(){ updateMapAndPanel(current_index+1,true); }
+function resetAnimation(){ current_index=0; updateMapAndPanel(current_index,false); playPauseBtn.textContent='Bắt đầu'; clearInterval(animation_interval); animation_interval=null; }
+
+// ---------- EVENTS ----------
+playPauseBtn.addEventListener('click',startAnimation);
+nextBtn.addEventListener('click',nextEvent);
+resetBtn.addEventListener('click',resetAnimation);
+speedControl.addEventListener('input',()=>{ updateSpeedLabel(); if(animation_interval){ clearInterval(animation_interval); animation_interval=null; startAnimation(); } });
+timelineSlider.addEventListener('input',()=>updateMapAndPanel(Number(timelineSlider.value),true));
+searchInput.addEventListener('input',filterTimeline);
+
+// ---------- INIT ----------
+setupMap();
+updateStats();
+initTimeline();
+updateMapAndPanel(0,false);
+updateSpeedLabel();
+timelineSlider.max=HOC_CHI_MINH_TRAJECTORY.length-1;
+</script>
+</body>
+</html>
